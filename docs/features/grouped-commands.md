@@ -1,3 +1,7 @@
+---
+description: "Grouped CLI Commands (FE-09) organizing dotted module IDs into nested Click subcommand groups by namespace prefix, with display.cli.group override and collapsed root help for 50+ modules."
+---
+
 # Feature Spec: Grouped CLI Commands
 
 **Feature ID**: FE-09

@@ -1,3 +1,7 @@
+---
+description: "Schema Parser (FE-02) converting a module's JSON Schema input_schema into Click options: type mapping, boolean flag pairs, enum choices, required enforcement, and $ref/$defs resolution."
+---
+
 # Feature Spec: Schema Parser
 
 **Feature ID**: FE-02

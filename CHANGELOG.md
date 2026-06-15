@@ -4,6 +4,22 @@ All notable changes to the apcore-cli specification will be documented in this f
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.1] - 2026-06-15
+
+Compatibility maintenance release. Tracks the aligned **apcore 0.24.0** and **apcore-toolkit 0.8.1** runtime upgrade across all three SDKs. No specification changes — the apcore 0.22.0 → 0.24.0 delta touches no surface the CLI consumes, verified against the full Python / TypeScript / Rust test suites (789 / 653 / 791 passing).
+
+### Changed
+
+- **`README.md` Version Compatibility snapshot refreshed to apcore 0.24.0 + apcore-toolkit 0.8.1** (2026-06-15). All three SDKs raise their dependency floors and ship as 0.10.1:
+  - `apcore-cli-python`: `apcore>=0.24.0`, `apcore-toolkit>=0.8.1`
+  - `apcore-cli-typescript`: peer `apcore-js>=0.24.0`, `apcore-toolkit>=0.8.1`
+  - `apcore-cli-rust`: `apcore = "0.24"`, `apcore-toolkit = "=0.8.1"`
+- **Dependency-pin divergence (issue 6.8) — pins refreshed, structural divergence unchanged.** Python/TypeScript keep open-upper-bound pins (now `>=0.8.1`); Rust keeps an exact pin (now `=0.8.1`). Both are current as of this release; reconciliation to consistent caret semantics is still planned for a follow-up coordinated release.
+
+### Notes
+
+- **No SDK source changes required.** The apcore 0.22→0.24 delta is internal to apcore or unused by the CLI layer: per-instance `ToggleState` isolation (#71), default AI error-recovery metadata (#70), and the **A-D-019** error-`details` `snake_case` alignment — which renames only the *inner* keys of the three call-chain-guard errors (`maxDepth`→`max_depth`, …) that the CLI forwards verbatim and never reads. Stable surfaces the CLI depends on (`Registry.list` / `get_definition`, `Executor.call`, the approval handler, toolkit `format_*`) are unchanged across the delta. Mirrors apcore-toolkit 0.8.1's own "runtime bump, zero API change" outcome.
+
 ## [0.10.0] - 2026-05-29
 
 Maintenance release. Two spec-accuracy fixes (D9-004 shell-integration retirement, output-formatter architectural boundary clarification) and an ecosystem version compatibility section in the README.

@@ -1,3 +1,7 @@
+---
+description: "Shell Integration (FE-06) providing the completion subcommand for bash/zsh/fish scripts and man-page generation in roff format, both driven by Registry module metadata."
+---
+
 # Feature Spec: Shell Integration
 
 **Feature ID**: FE-06

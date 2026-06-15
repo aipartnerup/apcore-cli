@@ -1,3 +1,7 @@
+---
+description: "TTY-aware Human-in-the-Loop approval gate (FE-03) that intercepts modules with requires_approval, supporting --yes/env bypass, non-TTY exit 46, and a 60s timeout."
+---
+
 # Feature Spec: Approval Gate
 
 **Feature ID**: FE-03

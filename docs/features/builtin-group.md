@@ -1,3 +1,7 @@
+---
+description: "Built-in Command Group (FE-13) relocating all apcore-cli commands under a reserved apcli namespace, with visibility modes (all/none/include/exclude) and disable_env opt-out."
+---
+
 # Feature Spec: Built-in Command Group (`apcli`)
 
 **Feature ID**: FE-13

@@ -594,29 +594,29 @@ apcore Registry + Executor (your modules, unchanged)
 
 | Language | Repository | Status |
 |----------|-----------|--------|
-| **Python** | [apcore-cli-python](https://github.com/aiperceivable/apcore-cli-python) | v0.10.0 |
-| **TypeScript** | [apcore-cli-typescript](https://github.com/aiperceivable/apcore-cli-typescript) | v0.10.0 |
-| **Rust** | [apcore-cli-rust](https://github.com/aiperceivable/apcore-cli-rust) | v0.10.0 |
+| **Python** | [apcore-cli-python](https://github.com/aiperceivable/apcore-cli-python) | v0.10.1 |
+| **TypeScript** | [apcore-cli-typescript](https://github.com/aiperceivable/apcore-cli-typescript) | v0.10.1 |
+| **Rust** | [apcore-cli-rust](https://github.com/aiperceivable/apcore-cli-rust) | v0.10.1 |
 
 ## Version Compatibility
 
 apcore-cli is part of the broader apcore ecosystem; packages that share a
 minor version line are tested to work together. Snapshot below is the
-**currently tested combination** (2026-05-18). Full cross-ecosystem matrix
+**currently tested combination** (2026-06-15). Full cross-ecosystem matrix
 lives in [`apcore` README](https://github.com/aiperceivable/apcore#version-compatibility).
 
 | Component | Required version | Notes |
 |---|---|---|
-| `apcore` core SDK | `>= 0.21.0` (tested with 0.22.0) | apcore-cli-python / -typescript pin `>=0.21.0` (open); apcore-cli-rust pins `apcore = "0.21"` (caret 0.21.x) |
-| `apcore-toolkit` | tested with 0.7.0 | **required** runtime dep (no soft fallback as of 0.10.0); per-language pin varies — see 6.8 note below |
+| `apcore` core SDK | `>= 0.24.0` (tested with 0.24.0) | apcore-cli-python / -typescript pin `>=0.24.0` (open); apcore-cli-rust pins `apcore = "0.24"` (caret 0.24.x) |
+| `apcore-toolkit` | `>= 0.8.1` (tested with 0.8.1) | **required** runtime dep (no soft fallback as of 0.10.0); per-language pin varies — see 6.8 note below |
 
 ### Known dependency-pin divergence (tracked as issue 6.8)
 
 | CLI package | apcore-toolkit pin | Effective range |
 |---|---|---|
-| apcore-cli-python | `apcore-toolkit>=0.7.0` | open upper bound — accepts future toolkit minors |
-| apcore-cli-typescript | `"apcore-toolkit": ">=0.7.0"` | open upper bound |
-| apcore-cli-rust | `apcore-toolkit = "=0.7.0"` | **exact pin** — blocks future toolkit minors until manually bumped |
+| apcore-cli-python | `apcore-toolkit>=0.8.1` | open upper bound — accepts future toolkit minors |
+| apcore-cli-typescript | `"apcore-toolkit": ">=0.8.1"` | open upper bound |
+| apcore-cli-rust | `apcore-toolkit = "=0.8.1"` | **exact pin** — blocks future toolkit minors until manually bumped |
 
 Reconciliation (adopting consistent caret semantics across all three) is
 planned for a follow-up coordinated release.

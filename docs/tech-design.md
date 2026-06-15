@@ -1,3 +1,7 @@
+---
+description: "Technical Design v2.x for apcore-cli: architecture for grouped commands, display overlay, schema-to-Click mapping, approval, security stack, and the seven-format output set with skill export."
+---
+
 # Technical Design: apcore-cli
 
 ---

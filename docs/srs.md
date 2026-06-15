@@ -1,3 +1,7 @@
+---
+description: "Software Requirements Specification (SRS-APCORE-CLI-001) defining functional and non-functional requirements for apcore-cli: dispatch, schema, approval, discovery, security, shell, and output."
+---
+
 # Software Requirements Specification: apcore-cli
 
 ---

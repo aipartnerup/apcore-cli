@@ -1,3 +1,7 @@
+---
+description: "Getting-started guide for apcore-cli: pip install, running the Python SDK example modules, discovering modules, and building your own, in under five minutes."
+---
+
 # Getting Started
 
 This guide walks you through installing `apcore-cli`, running your first module, and building your own — all in under 5 minutes.

@@ -1,3 +1,7 @@
+---
+description: "Output Formatter (FE-08) for TTY-adaptive rendering: rich tables for terminals, JSON for pipes, plus csv/yaml/jsonl and toolkit-delegated markdown/skill SKILL.md export styles."
+---
+
 # Feature Spec: Output Formatter
 
 **Feature ID**: FE-08

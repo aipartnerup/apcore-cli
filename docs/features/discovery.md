@@ -1,3 +1,7 @@
+---
+description: "Discovery (FE-04) providing the list and describe subcommands for browsing Registry modules, with AND-logic tag filtering and TTY-adaptive table/JSON output and highlighted schemas."
+---
+
 # Feature Spec: Discovery
 
 **Feature ID**: FE-04

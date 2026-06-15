@@ -1,3 +1,7 @@
+---
+description: "Init Command (FE-10) scaffolding subcommand (apcli init module <id>) generating module boilerplate in decorator, convention, or binding styles for a zero-config scaffold-then-run workflow."
+---
+
 # Feature Spec: Init Command
 
 **Feature ID**: FE-10

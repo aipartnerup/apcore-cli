@@ -1,3 +1,7 @@
+---
+description: "Config Resolver (FE-07) implementing the 4-tier precedence hierarchy CLI flag > env var > apcore.yaml > default, with graceful malformed-file handling and dot-notation key access."
+---
+
 # Feature Spec: Config Resolver
 
 **Feature ID**: FE-07

@@ -1,3 +1,7 @@
+---
+description: "Project manifest for apcore-cli: the FE-01 through FE-13 feature table with descriptions and priorities, requirement traceability matrix, and project dependencies."
+---
+
 # Project Manifest: apcore-cli
 
 **Project Name**: apcore-cli

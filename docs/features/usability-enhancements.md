@@ -1,3 +1,7 @@
+---
+description: "Usability Enhancements (FE-11, v0.6.0) adding --dry-run, system commands, error ai_guidance, --trace, --stream, enhanced list, --strategy, and extra output formats over the apcore API."
+---
+
 # Feature Spec: Usability Enhancements (v0.6.0)
 
 **Feature ID**: FE-11

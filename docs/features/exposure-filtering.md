@@ -1,3 +1,7 @@
+---
+description: "Module Exposure Filtering (FE-12) with declarative expose config (all/include/exclude) and glob patterns controlling which discovered modules surface as CLI commands; a UX filter, not security."
+---
+
 # Feature Spec: Module Exposure Filtering
 
 **Feature ID**: FE-12

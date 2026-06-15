@@ -1,3 +1,7 @@
+---
+description: "Security Manager (FE-05) sub-package: API key auth for remote registries, keyring + AES-256-GCM encrypted config, JSON Lines audit logging, and subprocess execution sandboxing."
+---
+
 # Feature Spec: Security Manager
 
 **Feature ID**: FE-05

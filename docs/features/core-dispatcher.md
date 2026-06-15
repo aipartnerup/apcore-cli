@@ -1,3 +1,7 @@
+---
+description: "Core Dispatcher (FE-01) providing the LazyModuleGroup/GroupedModuleGroup Click entry point that lazily discovers Registry modules, handles STDIN JSON, and delegates to the apcore Executor."
+---
+
 # Feature Spec: Core Dispatcher
 
 **Feature ID**: FE-01
