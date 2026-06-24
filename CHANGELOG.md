@@ -4,6 +4,22 @@ All notable changes to the apcore-cli specification will be documented in this f
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.2] - 2026-06-24
+
+Compatibility maintenance release. Tracks the aligned **apcore 0.25.0** and **apcore-toolkit 0.9.1** runtime upgrade across all three SDKs. No specification changes — neither the apcore 0.24.0 → 0.25.0 delta (config-driven ACL discovery via `acl.root`) nor the apcore-toolkit 0.8.1 → 0.9.1 bug-fix delta touches any surface the CLI consumes.
+
+### Changed
+
+- **`README.md` Version Compatibility snapshot refreshed to apcore 0.25.0 + apcore-toolkit 0.9.1** (2026-06-24). All three SDKs raise their dependency floors and ship as 0.10.2:
+  - `apcore-cli-python`: `apcore>=0.25.0`, `apcore-toolkit>=0.9.1`
+  - `apcore-cli-typescript`: peer `apcore-js>=0.25.0`, `apcore-toolkit>=0.9.1`
+  - `apcore-cli-rust`: `apcore = "0.25"`, `apcore-toolkit = "=0.9.1"`
+- **Dependency-pin divergence (issue 6.8) — pins refreshed, structural divergence unchanged.** Python/TypeScript keep open-upper-bound pins (now `>=0.9.1`); Rust keeps an exact pin (now `=0.9.1`). Both are current as of this release; reconciliation to consistent caret semantics is still planned for a follow-up coordinated release.
+
+### Notes
+
+- **No SDK source changes required.** apcore 0.25.0 adds config-driven ACL discovery (`acl.root` activation + `ACL.discover`), auto-wired only by the `APCore` bootstrap and skipped when the caller supplies its own `Executor`. All three CLIs construct an `Executor` directly and never construct `APCore`, so ACL discovery does not engage; the change is backward-compatible regardless (a missing `acl.root` attaches no ACL, preserving the no-enforcement default), and Rust's `acl.root` now defaults to `./acl` instead of being hard-required — relaxing validation only. apcore-toolkit 0.9.1 is a cross-language bug-fix release (Python OpenAPI integer/`null` key handling, TypeScript `RegistryVerifier`/`RegistryWriter` fixes, Rust `RegistryWriter::write` relaxed to `&Registry`) whose stable surface consumed by the CLI (`format_*`, `DisplayResolver`, `BindingLoader`, `RegistryWriter`) is unchanged.
+
 ## [0.10.1] - 2026-06-15
 
 Compatibility maintenance release. Tracks the aligned **apcore 0.24.0** and **apcore-toolkit 0.8.1** runtime upgrade across all three SDKs. No specification changes — the apcore 0.22.0 → 0.24.0 delta touches no surface the CLI consumes, verified against the full Python / TypeScript / Rust test suites (789 / 653 / 791 passing).
