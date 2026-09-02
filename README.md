@@ -12,6 +12,7 @@
 **The CLI Adapter for apcore — Expose modules as high-performance, AI-perceivable command-line tools.**
 
 > **Build once, invoke by Code, AI, or Terminal.**
+> Every call validated, authorized, and evidenced.
 
 | | |
 |---|---|
@@ -594,29 +595,29 @@ apcore Registry + Executor (your modules, unchanged)
 
 | Language | Repository | Status |
 |----------|-----------|--------|
-| **Python** | [apcore-cli-python](https://github.com/aiperceivable/apcore-cli-python) | v0.10.2 |
-| **TypeScript** | [apcore-cli-typescript](https://github.com/aiperceivable/apcore-cli-typescript) | v0.10.2 |
-| **Rust** | [apcore-cli-rust](https://github.com/aiperceivable/apcore-cli-rust) | v0.10.2 |
+| **Python** | [apcore-cli-python](https://github.com/aiperceivable/apcore-cli-python) | v0.11.0 |
+| **TypeScript** | [apcore-cli-typescript](https://github.com/aiperceivable/apcore-cli-typescript) | v0.11.0 |
+| **Rust** | [apcore-cli-rust](https://github.com/aiperceivable/apcore-cli-rust) | v0.11.0 |
 
 ## Version Compatibility
 
 apcore-cli is part of the broader apcore ecosystem; packages that share a
 minor version line are tested to work together. Snapshot below is the
-**currently tested combination** (2026-06-24). Full cross-ecosystem matrix
+**currently tested combination** (2026-09-02). Full cross-ecosystem matrix
 lives in [`apcore` README](https://github.com/aiperceivable/apcore#version-compatibility).
 
 | Component | Required version | Notes |
 |---|---|---|
-| `apcore` core SDK | `>= 0.25.0` (tested with 0.25.0) | apcore-cli-python / -typescript pin `>=0.25.0` (open); apcore-cli-rust pins `apcore = "0.25"` (caret 0.25.x) |
-| `apcore-toolkit` | `>= 0.9.1` (tested with 0.9.1) | **required** runtime dep (no soft fallback as of 0.10.0); per-language pin varies — see 6.8 note below |
+| `apcore` core SDK | `>= 0.28.0` (tested with 0.28.0) | apcore-cli-python / -typescript pin `>=0.28.0` (open); apcore-cli-rust pins `apcore = ">=0.28"` (open, plain semver range) |
+| `apcore-toolkit` | `>= 0.10.2` (tested with 0.10.2) | **required** runtime dep (no soft fallback as of 0.10.0); per-language pin varies — see 6.8 note below |
 
 ### Known dependency-pin divergence (tracked as issue 6.8)
 
-| CLI package | apcore-toolkit pin | Effective range |
-|---|---|---|
-| apcore-cli-python | `apcore-toolkit>=0.9.1` | open upper bound — accepts future toolkit minors |
-| apcore-cli-typescript | `"apcore-toolkit": ">=0.9.1"` | open upper bound |
-| apcore-cli-rust | `apcore-toolkit = "=0.9.1"` | **exact pin** — blocks future toolkit minors until manually bumped |
+| CLI package | apcore pin | apcore-toolkit pin | Effective range |
+|---|---|---|---|
+| apcore-cli-python | `apcore>=0.28.0` | `apcore-toolkit>=0.10.2` | open upper bound — accepts future minors |
+| apcore-cli-typescript | peer `apcore-js>=0.28.0` | peer `apcore-toolkit>=0.10.2` | open upper bound |
+| apcore-cli-rust | `apcore = ">=0.28"` | `apcore-toolkit = ">=0.10.2"` | open upper bound |
 
 Reconciliation (adopting consistent caret semantics across all three) is
 planned for a follow-up coordinated release.

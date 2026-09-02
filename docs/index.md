@@ -3,6 +3,7 @@
 **The CLI Adapter for apcore — Expose modules as high-performance, AI-perceivable command-line tools.**
 
 > Build once, invoke by Code, AI, or Terminal.
+> Every call validated, authorized, and evidenced.
 
 apcore-cli takes your **apcore modules** and automatically exposes them as **CLI subcommands** — with zero code changes. It is the terminal-native counterpart to `apcore-mcp` (Model Context Protocol) and `apcore-a2a` (Agent-to-Agent).
 

@@ -4,6 +4,69 @@ All notable changes to the apcore-cli specification will be documented in this f
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.0] - 2026-09-02
+
+Tracks the aligned **apcore 0.28.0** and **apcore-toolkit 0.10.2** runtime upgrade across all three SDKs, which ship as **0.11.0**.
+
+Unlike 0.10.1 through 0.10.3 — each of which was a tracking release carrying no specification change and no SDK source change — this one is neither. Reading the full 0.28.0 delta and exercising it against the running runtime surfaced **three** defects: two in `apcore-cli-python` alone, and one shared by all three SDKs. All are pre-existing rather than upgrade regressions — 0.28.0 is what made them reachable or visible.
+
+**Why a minor.** Two reasons, either sufficient. The specification gained normative content: §3.2.2 now states the four-tier health status set with a **MUST NOT** on dropping a tier, corrects what `--all` actually filters, and adds conformance case **T-SYS-02a**. And two SDK fixes change what a working consumer observes — a script branching on exit code `1` from an `apcli` system command now sees `45`, and a caller doing `handler.request_approval(...)["status"]` now gets a `TypeError`. Neither was correct behaviour, but apcore's own 0.28.0 release note sets the house rule for exactly this case: a change a consumer can notice "must ship as a **minor** (or major) version bump, never a patch". This also re-aligns the specification and SDK version lines, which had drifted to 0.10.3 against 0.10.5.
+
+### Changed
+
+- **`README.md` Version Compatibility snapshot refreshed to apcore 0.28.0 + apcore-toolkit 0.10.2** (2026-09-02). All three SDKs raise their dependency floors and ship as 0.11.0:
+  - `apcore-cli-python`: `apcore>=0.28.0`, `apcore-toolkit>=0.10.2`
+  - `apcore-cli-typescript`: peer `apcore-js>=0.28.0`, peer `apcore-toolkit>=0.10.2`
+  - `apcore-cli-rust`: `apcore = ">=0.28"`, `apcore-toolkit = ">=0.10.2"`
+
+### Notes
+
+- **The one 0.28.0 change that reaches the CLI layer is the approval gate's new composition (§6.9).** Since spec v1.28.0 the gate fires on the **union** of the module annotation, an ACL rule carrying `approval: required` (§6.1.6-§6.1.8), and `gate_destructive` — so a call to a module annotated `requires_approval: false` can now be routed to the CLI's `CliApprovalHandler`, which previously only saw annotation-gated modules. `Executor.validate()` reports the same union (§7.9.5), which the CLI forwards verbatim as `requires_approval` from `apcli validate` and `--dry-run`; that is a correctness gain the CLI gets for free.
+
+  Verified end-to-end in all three languages against the 0.28.0 runtime, and each SDK now carries the probe as a permanent regression test (`tests/test_approval.py::TestApprovalGateEndToEnd`, `tests/acl-argument-scoped-approval.test.ts`, `tests/acl_argument_scoped_approval.rs`). The shape: a `git.push` module annotated `requires_approval: false` behind an `arguments: { has_key: ["force"] }` approval rule must run ungated for `git push` and reach the handler for `git push --force`, with preflight reporting `false` and `true` respectively.
+
+  Each suite includes a **discriminating** case, because the happy path alone cannot detect the failure it is written for: with the handler set to refuse and no TTY, the ungated call must still succeed while the gated one must be denied. A gate that never fired would pass every other assertion. The Python cases were additionally confirmed to fail against the pre-fix handler.
+
+- **`apcore-cli-python` failed that verification on two counts (both fixed, both with regression tests).**
+  1. `CliApprovalHandler` returned a **mapping** where the protocol requires an `ApprovalResult`. apcore's gate reads the answer by attribute, so every gate-routed approval — annotation-sourced included, and therefore **pre-existing** — raised `AttributeError` inside the gate and surfaced as `MODULE_EXECUTE_ERROR`. Nothing in that SDK exercised `request_approval`, which is why it survived. apcore-cli-rust converts through `cli_to_apcore_result` and apcore-cli-typescript's `ApprovalResult` is a structurally-typed interface, so this was a Python-only divergence. 0.28.0 widened its reach from annotation-gated modules to any module an ACL rule gates.
+  2. `exit_code_for_error` matched only on the CLI's own exception classes, so an apcore-raised error from an `apcli` system command exited **1** instead of its canonical code, contradicting the taxonomy `system_cmd._exit_on_system_error` documents. TS `exitCodeForError` and Rust `map_module_error_to_exit_code` both read the apcore wire code; Python had the map and never consulted it from that path. 0.28.0 makes it reachable on a routine command: `system.usage.*` now constrains `period` to `^[1-9][0-9]*[hd]$`, and 0.28.0 also stops Python's dict-declared schemas being validation pass-throughs, so `apcli usage --period 0h` now raises `SCHEMA_VALIDATION_ERROR` where it previously returned an empty window with exit 0.
+
+- **A second defect, in all three SDKs at once: `apcli health` reported "no data" for a project whose modules it had just listed.** apcore classifies module health in **four** tiers — `healthy` / `degraded` / `error` / `unknown` — and every CLI's summary tally iterated only the first three. `unknown` means "no calls recorded yet", the state every module in a fresh project is in, so the most common case printed a populated table above a total that denied it.
+
+  Pre-existing in all three, and surfaced by this release rather than caused by it: `sys-health-summary.schema.json` had declared the enum as `["healthy", "degraded", "unhealthy"]` — a value **no SDK emits** — and apcore 0.28.0 corrects it to the four tiers actually produced, splitting the summary's `unhealthy` count into `error` and `unknown`. Once the canonical contract names four tiers, rendering three is a plain omission. Fixed and regression-tested in all three SDKs, each confirmed to go red against the pre-fix formatter.
+
+- **Specification corrected alongside the SDK fix (`docs/features/usability-enhancements.md` §3.2.2).** The spec was the origin of the three-tier reading: its worked example showed `Summary: 1 healthy, 1 degraded, 1 error` with no fourth tier, and its flag table described `--all` as "Include healthy modules (default: only degraded/error)". Both are now corrected — the example carries an `unknown` row and a four-tier summary, a new **Status tiers** paragraph states the four-tier set and names apcore as its owner (`schemas/sys-health-summary.schema.json`, §6.6), and the `--all` row records what the filter actually does.
+
+  The flag description mattered more than it looks: `include_healthy: false` filters **only** the `healthy` tier, so the **default** `apcli health` — no `--all` — already lists `unknown` modules. The defect was therefore not confined to a flag most users never pass; it was the first thing a new project saw. Verified against apcore-python's `HealthSummaryModule`, whose counts dict has carried all four keys the whole time. `T-SYS-02` is corrected and `T-SYS-02a` added to pin the all-`unknown` case.
+
+- **A fourth defect, found by cross-SDK diff rather than by the 0.28.0 delta: the exit-code maps disagreed.** `DEPENDENCY_NOT_FOUND` and `DEPENDENCY_VERSION_MISMATCH` — both real apcore `ErrorCode` variants — map to 44 in apcore-cli-python and apcore-cli-typescript, and fell through to 1 in apcore-cli-rust. The same dependency failure therefore ended a script with a different code depending on which CLI ran it, and 1 reads as "the module ran and failed" rather than "it could not be resolved".
+
+  Method worth recording: the three maps were extracted programmatically and compared key-for-key rather than read. That reported **2 divergent of 22 codes**; after the fix it reports 0. Spot-reading had already missed this once. All three SDKs now carry an assertion on both codes.
+
+- **`descriptor.dependencies` starts returning real data, with no CLI change.** apcore 0.28.0 makes `dependencies` a **parsed** field on the module descriptor in all three SDKs (spec §12.2, required since v1.10.0 but only apcore-rust implemented it). The CLIs already read `descriptor.dependencies`, which was absent in apcore-python and apcore-typescript — so `apcli list --show-deps` and the JSON `dependency_count` reported `0` for every module that declared dependencies, and now report the true count. An output change, not a code change; verified against a two-module registry.
+
+- **`apcore-cli-typescript` and `apcore-cli-rust` needed no *upgrade-driven* source changes**, verified by their full suites (653 and 791 tests) plus the end-to-end approval probe above. Three of 0.28.0's BREAKING Rust changes name types the CLI crate references — `ACLRule` gaining a field, `AuditEntry` becoming `#[non_exhaustive]`, `CallbackApprovalHandler::new` becoming async and fallible — and all three are source-compatible because the crate constructs none of them and implements `apcore::ApprovalHandler` directly.
+
+- **What the delta does not touch.** None of the three CLIs constructs or loads an `ACL`, calls `check()` / `check_access()`, reads an `AuditEntry`, or builds an `ACLRule` — so §6.8.1's fail-closed legacy boolean, §6.1.5's `effect` value closure, the new `approval` field and `validate_rules()` are all inert at this layer. `ExecutionPolicy.resolve()`'s new call-site parameters are additive and no CLI configures a policy. `p99_latency_ms` changing value and `hourly_distribution[].hour` changing format are display-only or unread: `hourly_distribution` appears in none of the three SDKs.
+
+- **apcore-toolkit 0.10.2 is a dependency-tracking release with no source change**, so the surfaces the CLI consumes (`format_*`, `DisplayResolver`, `BindingLoader`, `RegistryWriter`) are unchanged.
+
+## [0.10.3] - 2026-08-17
+
+Compatibility maintenance release. Tracks the aligned **apcore 0.27.0** and **apcore-toolkit 0.10.x** runtime upgrade across all three SDKs. No specification changes — none of the apcore 0.26.0 → 0.27.0 delta touches any surface the CLI consumes, verified by running each SDK's full test suite against the 0.27.0 runtime (Python 798 passed / 5 xfailed, TypeScript 653 passed, Rust full `make check` including the 511-case conformance suite — all unmodified).
+
+### Changed
+
+- **`README.md` Version Compatibility snapshot refreshed to apcore 0.27.0 + apcore-toolkit 0.10.x** (2026-08-17). All three SDKs raise their `apcore` dependency floors and ship as 0.10.5:
+  - `apcore-cli-python`: `apcore>=0.27.0`, `apcore-toolkit>=0.10.0`
+  - `apcore-cli-typescript`: peer `apcore-js>=0.27.0`, peer `apcore-toolkit>=0.10.0`
+  - `apcore-cli-rust`: `apcore = ">=0.27"`, `apcore-toolkit = ">=0.10.0"`
+- **Dependency-pin divergence (issue 6.8) — Rust's exact pin retired.** Rust's `apcore-toolkit` pin is now `>=0.10.0` (open upper bound, changed at 0.10.3), so all three SDKs share open-upper-bound apcore-toolkit pins. The `=`-pin blockage previously documented in this section no longer exists; the table and the reconciliation note are updated to reflect the resolved state.
+
+### Notes
+
+- **No SDK source changes required.** The apcore 0.26.0 → 0.27.0 delta is BREAKING at the spec level (middleware `before_step`/`after_step` semantics, ACL-failed `validate()` introspection withholding, `Registry.register` metadata `dependencies` persistence, A23 schema-conversion rules, `pipeline.configure` 4-field set, `requires`/`provides` non-configurability, no module-boundary type coercion, plus per-SDK removals — Python `namespace_keys`, TypeScript tracing root exports, Rust `ErrorCode::ConfigurationError` rename / OtelTracing removal) — but every one of these lands on a surface the CLI does not consume: the CLIs never construct or configure middleware/pipelines, never call `Registry.register` (registration is via `discover()` / toolkit `RegistryWriter`), run their own schema→CLI-flag converters on the descriptor's `input_schema`, perform their own flag-level coercion before `executor.call`/`execute`, and read only `valid`/`checks`/`requiresApproval` from `PreflightResult` (never `predicted_changes`). Full per-change evidence is recorded in each SDK's 0.10.5 CHANGELOG entry.
+
 ## [0.10.2] - 2026-06-24
 
 Compatibility maintenance release. Tracks the aligned **apcore 0.25.0** and **apcore-toolkit 0.9.1** runtime upgrade across all three SDKs. No specification changes — neither the apcore 0.24.0 → 0.25.0 delta (config-driven ACL discovery via `acl.root`) nor the apcore-toolkit 0.8.1 → 0.9.1 bug-fix delta touches any surface the CLI consumes.

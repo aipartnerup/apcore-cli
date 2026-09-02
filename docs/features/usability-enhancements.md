@@ -187,16 +187,30 @@ Calls `system.health.summary` → TTY-adaptive output.
 **TTY output:**
 
 ```
-Health Overview (3 modules)
+Health Overview (4 modules)
 
   Module              Status     Error Rate   Top Error
   ──────────────────  ─────────  ──────────   ─────────────────
   math.add            healthy    0.00%        —
   db.query            degraded   3.20%        MODULE_TIMEOUT (12)
   email.send          error      15.70%       ACL_DENIED (89)
+  report.build        unknown    0.00%        —
 
-Summary: 1 healthy, 1 degraded, 1 error
+Summary: 1 healthy, 1 degraded, 1 error, 1 unknown
 ```
+
+**Status tiers.** `system.health.summary` classifies every module into one of
+**four** tiers — `healthy`, `degraded`, `error`, `unknown` — and the `summary`
+object carries a count for each alongside `total_modules`. The tier set is owned
+by apcore (`schemas/sys-health-summary.schema.json`, PROTOCOL_SPEC §6.6); the CLI
+renders it and MUST NOT drop a tier.
+
+`unknown` means **no calls have been recorded yet**, which is the state every
+module in a freshly initialised project is in. It is therefore the tier the
+summary line is most likely to be reporting on a first run, and omitting it
+produces the specific defect of a populated table above a total that reads
+`no data`. The summary line lists only non-zero tiers, and falls back to
+`no data` only when every count is zero.
 
 **Invocation: `apcore-cli health <module_id>`**
 
@@ -221,7 +235,7 @@ Recent Errors (top 3):
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--threshold` | `0.01` | Error rate threshold for "healthy" status |
-| `--all` | `false` | Include healthy modules (default: only degraded/error) |
+| `--all` | `false` | Include `healthy` modules. Only that tier is filtered — the default view still lists `degraded`, `error` **and** `unknown` modules |
 | `--errors` | `10` | Max recent errors to display (module-level only) |
 
 #### 3.2.3 `usage` Command
@@ -374,7 +388,8 @@ def register_system_commands(cli, executor):
 | ID | Test |
 |----|------|
 | T-SYS-01 | `health` with no modules → "No modules found" |
-| T-SYS-02 | `health` shows degraded/error modules by default, `--all` includes healthy |
+| T-SYS-02 | `health` shows degraded/error/unknown modules by default, `--all` adds healthy |
+| T-SYS-02a | `health` summary line counts all four tiers; an all-`unknown` project reports `N unknown`, never `no data` |
 | T-SYS-03 | `health <id>` displays single-module detail with recent errors |
 | T-SYS-04 | `usage` displays summary table with call counts and trends |
 | T-SYS-05 | `usage <id> --period 7d` passes period to system module |
