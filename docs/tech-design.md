@@ -2119,6 +2119,118 @@ The `list` command gains:
 
 ---
 
+### 8.15 ACL Governance Implementation
+
+**Feature**: FE-14 | **Modules**: `apcore_cli/acl_loader.py`, `apcore_cli/acl_cmd.py`
+
+#### 8.15.1 Position in the architecture
+
+ACL enforcement is apcore's, not the CLI's. `acl_check` is step 4 of the executor's 11-step pipeline, and the CLI has always carried only the downstream half: exit code 77, the `acl` preflight row, and `acl_check` in `describe-pipeline`. What has never existed is the *attachment* — every CLI constructs an `Executor` directly rather than through `APCore`, which is the bootstrap that runs `ACL.discover()`. FE-14 supplies the attachment and an inspection surface; it adds no evaluation logic.
+
+The design rule that follows: the CLI resolves a *path* and calls `ACL.load`. It MUST NOT parse rule YAML itself. Rule-key closure, `effect`/`approval` enum closure, and pattern-array arity are apcore's contract and are conformance-tested there; a second parser would be a second answer.
+
+#### 8.15.2 Attachment sequence
+
+```
+ConfigResolver (FE-07, 4 tiers)
+        │  acl.root  ─ tier 1 --acl / create_cli(acl=)
+        │              tier 2 APCORE_ACL_ROOT
+        │              tier 3 apcore.yaml acl.root
+        │              tier 4 ./acl
+        ▼
+resolve_acl_root() ──── path absent ──▶ attach nothing, return None
+        │
+        │ path present
+        ▼
+   directory? ──yes──▶ <root>/global_acl.yaml ──absent──▶ return None
+        │ no                    │ present
+        ▼                       ▼
+                        ACL.load(file)          ── ACLRuleError ──▶ exit 47
+                              │
+                              ▼
+              acl.audit.enabled ? acl.set_audit_logger(AuditLogger)
+                              │
+                              ▼
+                     executor.set_acl(acl)
+```
+
+The missing-path branch is a hard invariant, not a convenience: synthesizing an empty `default_effect: deny` ACL would deny every call in every project that lacks an `acl/` directory. Attachment is also skipped when the caller supplied its own executor without an explicit `acl=`, because an embedded host that built its own `Executor` owns its own governance.
+
+#### 8.15.3 Audit logger installation
+
+`ACL.load(path)` takes no callback, and the callback is otherwise a constructor parameter in Python and TypeScript. Setting the private field reaches past the public surface; rebuilding the ACL to pass the callback discards the loaded file path and breaks `reload()`. `apcore-rust` already exposes `ACL::set_audit_logger`, so the resolution is a 2-of-3 parity port to Python and TypeScript, landing as apcore 0.30.0. FE-14 depends on it for FR-14-07 only; the rest of the feature needs apcore 0.29.0.
+
+#### 8.15.4 Query surface
+
+| Subcommand | apcore call | Exit |
+|---|---|---|
+| `acl list` | `acl.rules`, `acl.default_effect` | 0 |
+| `acl check` | `acl.check_access(caller, target, context)` | 0 allow / 77 deny |
+| `acl validate` | `acl.validate_rules()` | 0 clean / 47 any finding |
+| `acl status` | `executor.governance_state()` | 0, or 47 with `--strict` when unprotected |
+
+`check` uses `check_access` and never `check`: the boolean collapses "allowed but needs a human" to `false`, which would report a permitted call as denied. Authorization and approval are independent axes, so allow-with-approval exits 0.
+
+#### 8.15.5 Identity, not caller identity
+
+`Context.caller_id` is managed exclusively by `Context.child()`; `Context.create()` deliberately refuses it, so a top-level CLI invocation is always the effective caller `@external`. The CLI MUST NOT expose a flag that sets it — that would let any user assume any module's identity. What is settable is `Context.create(identity=…)`, which feeds the `roles` and `identity_types` conditions; `--identity-id`, `--identity-type`, and `--role` build it. These are unauthenticated argv assertions and are documented as such.
+
+---
+
+### 8.16 OpenAPI Import Implementation
+
+**Feature**: FE-15 | **Modules**: `apcore_cli/openapi_cmd.py`, `apcore_cli/openapi_source.py`
+
+#### 8.16.1 Staging
+
+FE-15 is delivered in two stages, split on whether a module registry is required.
+
+| Stage | Surface | Needs registry | Status |
+|---|---|---|---|
+| FE-15a | `apcli openapi scan`, `apcli openapi generate` | no | this release |
+| FE-15b | `--binding` proxy dispatch, `--openapi` startup import | yes | deferred |
+
+FE-15a is document-in, artifact-out. It builds no executor, registers no module, and issues no request to the described API — the only network activity is the single document fetch when the source is a URL. That is what lets it ship in all three SDKs at once.
+
+#### 8.16.2 Pipeline
+
+```
+SOURCE (path | http(s) URL)
+   │  load_spec            ── not 3.0.x/3.1.x ──▶ exit 47
+   ▼
+parsed document
+   │  OpenAPIScanner().scan(include=, exclude=, base_path_prefix=, include_deprecated=)
+   ▼
+list[ScannedModule] ──────────────┬──▶ detect_proxy_hazards(spec, modules)   [CLI-local diagnostic]
+   │                              │
+   ├─ scan ────▶ FE-08 format_modules (table|json|csv|yaml|jsonl|markdown|skill)
+   │
+   └─ generate ▶ YAMLWriter (.binding.yaml)
+```
+
+The CLI adds exactly one piece of analysis of its own — hazard detection — and it is a diagnostic, never a routing decision.
+
+`YAMLWriter` is the only writer FE-15a uses. The toolkit's source writers (`PythonWriter` / `TypeScriptWriter` / `RustWriter`) are unusable here for the same reason `RegistryWriter` is (§8.16.4): all of them resolve `target` as a `module.path:callable` import path, and an OpenAPI-derived `target` is a route descriptor. Real host-language output for an operation would be an HTTP proxy implementation — a generator the toolkit does not ship — so it is deferred with FE-15b.
+
+#### 8.16.3 Why FE-15b is deferred
+
+Two independent prerequisites, neither about OpenAPI:
+
+1. **`--binding` is a registration path in one SDK only.** Python runs `BindingLoader` → `RegistryWriter.write(scanned, registry)`. TypeScript populates a display-overlay map and its own comments note the path "doesn't go through RegistryWriter"; it additionally has no standalone registry at all (`void resolvedExtDir; // Will be used when apcore-js registry is wired`). Rust constructs a `DisplayResolver`, discards it, and logs a line. FE-15b requires registration parity in TypeScript and Rust first.
+2. **`HTTPProxyRegistryWriter` cannot encode a query parameter on a body method.** It chooses body-versus-query by HTTP method alone, because `ScannedModule` carries no parameter locations — a deliberate toolkit decision to avoid a second source of truth. A query parameter on `POST`/`PUT`/`PATCH` is therefore sent in the JSON body, silently. The fix is upstream (apcore-toolkit 0.12.0, three SDKs plus corpus).
+
+Until (2) lands, FE-15b MUST refuse affected operations **per operation** — not registered, WARNING naming the operation and parameters, batch continues. Batch abort would contradict the `WriteResult` design, which exists so one bad module does not cost the other forty.
+
+#### 8.16.4 The `target` trap
+
+`OpenAPIScanner` sets `target` to a route descriptor (`"GET /pets"`), a documented deviation from `module.path:callable` that is safe upstream because the proxy writer reads `metadata` and never `target`. It is not safe for the generic binding path: `RegistryWriter._to_function_module` resolves `target` as a dotted import path and will fail.
+
+FE-15b therefore partitions loaded bindings rather than routing them uniformly: an entry carrying a valid `metadata.http_method` (non-empty uppercase, known method) and `metadata.url_path` (non-empty, leading `/`) goes to `HTTPProxyRegistryWriter`; everything else goes to `RegistryWriter`; anything carrying one key but not the other, or a malformed value, is refused with a named error. Validation is part of the partition because the toolkit marks both keys `!!! danger` — a malformed value makes the writer fall back to `GET /`, pointing every module at the API root.
+
+The keys survive the round-trip: `YAMLWriter` emits `metadata` verbatim and `BindingLoader` restores it through a filter that strips only `__proto__`, `constructor`, and `prototype`. FE-15a asserts this (T-OAPI-20) precisely because FE-15b depends on it.
+
+---
+
 ## 9. Technology Stack
 
 | Layer | Technology | Version | Rationale | SRS Reference |

@@ -1,10 +1,10 @@
 ---
-description: "Features overview for apcore-cli, mapping the 13 features (FE-01 through FE-13), the core execution path, and the dependency graph linking each feature spec and the project manifest."
+description: "Features overview for apcore-cli, mapping the 15 features (FE-01 through FE-15), the core execution path, and the dependency graph linking each feature spec and the project manifest."
 ---
 
 # Features Overview: apcore-cli
 
-`apcore-cli` exposes apcore modules as CLI subcommands through a layered architecture of 13 features. The core execution path runs: **Core Dispatcher** (FE-01) → **Schema Parser** (FE-02) → **Approval Gate** (FE-03) → **Security Manager** (FE-05). Module discovery is handled by **Discovery** (FE-04) with **Grouped Commands** (FE-09) for namespace organisation, **Exposure Filtering** (FE-12) for business-module access control, and **Built-in Command Group** (FE-13) to relocate apcore-cli-provided commands under a reserved `apcli` namespace. Output is managed by **Output Formatter** (FE-08) and extended by **Usability Enhancements** (FE-11). Shell integration (FE-06), configuration (FE-07), and scaffolding (FE-10, Init Command) round out the feature set.
+`apcore-cli` exposes apcore modules as CLI subcommands through a layered architecture of 15 features. The core execution path runs: **Core Dispatcher** (FE-01) → **Schema Parser** (FE-02) → **Approval Gate** (FE-03) → **Security Manager** (FE-05). Module discovery is handled by **Discovery** (FE-04) with **Grouped Commands** (FE-09) for namespace organisation, **Exposure Filtering** (FE-12) for business-module access control, and **Built-in Command Group** (FE-13) to relocate apcore-cli-provided commands under a reserved `apcli` namespace. Output is managed by **Output Formatter** (FE-08) and extended by **Usability Enhancements** (FE-11). Shell integration (FE-06), configuration (FE-07), and scaffolding (FE-10, Init Command) round out the feature set. **ACL Governance** (FE-14) attaches an apcore ACL to the CLI's executor and makes it inspectable, and **OpenAPI Import** (FE-15) turns an OpenAPI document into modules through apcore-toolkit.
 
 For the full feature list, implementation order, and dependency graph, see the [Project Manifest](../project-apcore-cli.md).
 
@@ -27,6 +27,8 @@ For the full feature list, implementation order, and dependency graph, see the [
 | FE-11 | Usability Enhancements (v0.6.0) | [usability-enhancements.md](usability-enhancements.md) |
 | FE-12 | Module Exposure Filtering (v0.7.0) | [exposure-filtering.md](exposure-filtering.md) |
 | FE-13 | Built-in Command Group (`apcli`) (v0.7.0) | [builtin-group.md](builtin-group.md) |
+| FE-14 | ACL Governance (v0.12.0) | [acl-governance.md](acl-governance.md) |
+| FE-15 | OpenAPI Import — FE-15a `scan`/`generate` (v0.12.0); FE-15b execution deferred | [openapi-import.md](openapi-import.md) |
 
 ---
 

@@ -1370,7 +1370,7 @@ The default shall be TTY-adaptive: `table` when `sys.stdout.isatty()` returns `T
 
 **Acceptance Criteria:**
 
-- **AC-1:** Given `--sandbox` is provided, when a module attempts to read `HOME` environment variable, then it shall not find it in the sandbox environment.
+- **AC-1:** Given `--sandbox` is provided, when a module reads the `HOME` environment variable, then it shall resolve to the per-call temporary directory, not the user's real home. (Corrected 2026-09-06: this previously required `HOME` to be *absent*, contradicting `features/security.md` §4.4 step 3 — which assigns `HOME = tmp` to confine accidental `~/` writes — and its `T-SEC-14`. Confining the value is the implemented and intended behaviour; unsetting it would leave `~/` expansion pointing at the invoking user's home in any child that computes it itself.)
 - **AC-2:** Given `--sandbox` is provided, when a module writes a file, then it shall be written to the temporary directory, not the user's working directory.
 - **AC-3:** Given no sandbox flag, when a module executes, then it shall run with access to the normal environment.
 
@@ -1982,7 +1982,159 @@ The system shall provide `build_program_man_page()` and `configure_man_help()` a
 
 ---
 
-### 5.10 CRUD Matrix
+### 5.10 ACL Governance (ACL)
+
+#### FR-ACL-001: ACL Resolution and Attachment
+
+| Field | Value |
+|-------|-------|
+| **ID** | FR-ACL-001 |
+| **Title** | ACL Resolution and Attachment to the Executor |
+| **Priority** | P1 |
+| **Priority Rationale** | Foundation of the feature. The CLI already surfaces ACL denials (exit 77) and an `acl` preflight row, but has never attached an ACL, so both paths are unreachable and `governance_state()` reports an unprotected control surface for every project. |
+| **Source** | Feature Spec FE-14 FR-14-01, FR-14-02, FR-14-08, FR-14-09; Tech Design v2.0 §8.15 |
+
+**Description:** The system shall resolve an ACL root through the 4-tier precedence chain (`create_cli(acl=)` / `--acl` > `APCORE_ACL_ROOT` > `apcore.yaml` `acl.root` > `./acl`), load it via apcore's `ACL.load`, and attach it with `Executor.set_acl()`. When the resolved path does not exist, or is a directory containing no `global_acl.yaml`, the system shall attach nothing and shall NOT synthesize an empty ACL. The system shall not parse ACL rule YAML itself. Attachment shall be skipped when the caller supplied its own executor and did not pass an explicit `acl=`. The system shall provide `--identity-id`, `--identity-type`, and `--role` flags that construct a `Context` identity, and shall NOT provide any flag that sets `Context.caller_id`.
+
+**Acceptance Criteria:**
+
+- **AC-1:** Given no `acl/` directory, then no ACL shall be attached and CLI behaviour shall be identical to the pre-FE-14 baseline, exit 0.
+- **AC-2:** Given `./acl/global_acl.yaml` exists, then `Executor.set_acl()` shall be called and `apcli acl status` shall report `acl_configured: true`.
+- **AC-3:** Given `--acl ./custom.yaml` and an `acl.root` in `apcore.yaml`, then the flag value shall win.
+- **AC-4:** Given a structurally invalid ACL file, then the CLI shall exit `47` with a message naming the file and the fault, and shall not exit `1` or `77`.
+- **AC-5:** Given an embedded caller supplying its own `executor` and no `acl=`, then no ACL shall be attached over the host's configuration.
+
+---
+
+#### FR-ACL-002: ACL Rule Introspection
+
+| Field | Value |
+|-------|-------|
+| **ID** | FR-ACL-002 |
+| **Title** | `apcli acl list` |
+| **Priority** | P2 |
+| **Priority Rationale** | Rules that cannot be read from the terminal are authored blind; `default_effect` in particular determines the meaning of every rule and is invisible in the file's rule list. |
+| **Source** | Feature Spec FE-14 FR-14-03; Tech Design v2.0 §8.15.4 |
+
+**Description:** The system shall provide `apcli acl list` rendering `default_effect` and each rule in definition order (which is evaluation order — first match wins, no priority sorting), in the formats `table`, `json`, `csv`, `yaml`, and `jsonl`. Table output shall list condition **keys** only; machine formats shall be lossless. With no ACL attached the command shall exit `0` and report an empty rule set rather than erroring.
+
+**Acceptance Criteria:**
+
+- **AC-1:** Given an ACL with 3 rules and `--format json`, then the `rules` array shall have length 3 with `index` values 0..2 in definition order.
+- **AC-2:** Given no ACL attached and `--format json`, then output shall be `{"source": null, "default_effect": null, "rules": []}` with exit 0.
+
+---
+
+#### FR-ACL-003: ACL Decision Query
+
+| Field | Value |
+|-------|-------|
+| **ID** | FR-ACL-003 |
+| **Title** | `apcli acl check` |
+| **Priority** | P1 |
+| **Priority Rationale** | The only way to answer "would this rule set permit this call" without performing the call. Required for authoring and for CI policy gates. |
+| **Source** | Feature Spec FE-14 FR-14-04; Tech Design v2.0 §8.15.4 |
+
+**Description:** The system shall provide `apcli acl check <TARGET>` evaluating a simulated call through `ACL.check_access()` and reporting both axes — `access` and `approval_required` — plus `matched_rule_index` and `reason`. The system shall NOT use the boolean `ACL.check()`, which collapses allow-with-approval to `false`. `--caller` shall accept an arbitrary string (default `@external`) because nothing is executed. Exit code shall be `0` when `access == "allow"` and `77` when `access == "deny"`, irrespective of `approval_required`.
+
+**Acceptance Criteria:**
+
+- **AC-1:** Given a matching `allow` rule, then the command shall exit `0` and report the matched rule index.
+- **AC-2:** Given a matching `deny` rule, then the command shall exit `77`.
+- **AC-3:** Given a matching `allow` rule carrying `approval: required`, then the command shall exit **`0`** with `approval_required: true` — not `77`.
+- **AC-4:** Given `conditions: {roles: [admin]}` and no `--role`, then the rule shall not match and the decision shall fall through to `default_effect`.
+
+---
+
+#### FR-ACL-004: ACL Diagnostics
+
+| Field | Value |
+|-------|-------|
+| **ID** | FR-ACL-004 |
+| **Title** | `apcli acl validate` and `apcli acl status` |
+| **Priority** | P1 |
+| **Priority Rationale** | `ACL.load` only warns about unregistered condition keys, because handler registration legitimately happens after load. Without an explicit post-bootstrap check, a rule that silently denies everything it matches ships undetected. |
+| **Source** | Feature Spec FE-14 FR-14-05, FR-14-06, FR-14-07; Tech Design v2.0 §8.15.3, §8.15.4 |
+
+**Description:** The system shall provide `apcli acl validate` reporting every `RuleValidationFinding` from `ACL.validate_rules()`, rendering `sync_resolvable` and `async_resolvable` as separate columns that shall NOT be collapsed into one boolean, exiting `47` when at least one finding exists. The system shall provide `apcli acl status` rendering `Executor.governance_state()`, exiting `47` under `--strict` when `unprotected_control_surface` is true. When `acl.audit.enabled` is true the system shall install its audit logger through apcore's public `ACL.set_audit_logger`, preserving the loaded-from-YAML provenance that `reload()` depends on; `acl.audit.include_denied` shall govern whether **denied** decisions are logged, matching apcore's `schemas/acl-config.schema.json`.
+
+**Acceptance Criteria:**
+
+- **AC-1:** Given an unregistered condition key, then `validate` shall exit `47` and the finding shall name rule index, condition path, key, and effect.
+- **AC-2:** Given an async-only handler, then the finding shall render `sync: no, async: yes` as distinct values.
+- **AC-3:** Given control modules registered and no ACL attached, then `status` shall report `unprotected_control_surface: true`, and `--strict` shall exit `47`.
+- **AC-4:** Given `acl.audit.include_denied: false`, then a denied decision shall produce no audit entry while an allowed decision shall produce one.
+- **AC-5:** Given an ACL loaded from YAML with an audit logger installed, then `reload()` shall succeed.
+
+---
+
+### 5.11 OpenAPI Import (OAPI)
+
+#### FR-OAPI-001: OpenAPI Document Scanning
+
+| Field | Value |
+|-------|-------|
+| **ID** | FR-OAPI-001 |
+| **Title** | `apcli openapi scan` |
+| **Priority** | P1 |
+| **Priority Rationale** | Foundation of FE-15a and the only way to see what a document would produce before committing artifacts to disk. |
+| **Source** | Feature Spec FE-15 FR-15-01, FR-15-02, FR-15-05, FR-15-06; Tech Design v2.0 §8.16 |
+
+**Description:** The system shall provide `apcli openapi scan <SOURCE>` accepting a local path or `http(s)://` URL taken verbatim, loading it via apcore-toolkit `load_spec`, scanning it via `OpenAPIScanner().scan()`, and rendering the resulting `ScannedModule` list in the formats `table`, `json`, `csv`, `yaml`, `jsonl`, `markdown`, and `skill`. The options `--include`, `--exclude`, `--prefix`, and `--no-deprecated` shall be forwarded verbatim to `scan()`. The system shall NOT expose the `transform_operation`, `derive_module_id`, or `transform_module` hooks, and shall NOT re-derive or post-process module IDs. Scanner warnings shall be rendered. The system shall additionally report operations that FE-15b will be unable to proxy — those declaring `in: query` parameters on a `POST`, `PUT`, or `PATCH` — under a distinct `hazards` heading. `--openapi-timeout` shall be expressed in seconds in all three SDKs.
+
+**Acceptance Criteria:**
+
+- **AC-1:** Given a valid OpenAPI 3.1 document, then one module shall be produced per operation, with IDs byte-identical to `derive_module_id`.
+- **AC-2:** Given a Swagger 2.0 document, then the CLI shall exit `47` with a message naming the `openapi` value found.
+- **AC-3:** Given an operation with an unresolvable or external `$ref`, then a warning shall be rendered, the module shall still be produced, and exit shall be `0`.
+- **AC-4:** Given a `POST` operation with `in: query` parameters, then a hazard shall be reported naming the method and parameters, and exit shall be `0`.
+- **AC-5:** Given a `GET` operation with query parameters, then no hazard shall be reported.
+
+---
+
+#### FR-OAPI-002: OpenAPI Artifact Generation
+
+| Field | Value |
+|-------|-------|
+| **ID** | FR-OAPI-002 |
+| **Title** | `apcli openapi generate` |
+| **Priority** | P1 |
+| **Priority Rationale** | The build-time half of FE-15a, and the artifact whose routing contract FE-15b depends on entirely. |
+| **Source** | Feature Spec FE-15 FR-15-03, FR-15-04, FR-15-07; Tech Design v2.0 §8.16.4 |
+
+**Description:** The system shall provide `apcli openapi generate <SOURCE> -o DIR` writing scanned modules as `<id>.binding.yaml` through the apcore-toolkit `YAMLWriter`. The system shall NOT offer a host-language source writer: every toolkit source writer (`PythonWriter` / `TypeScriptWriter` / `RustWriter`) resolves `target` as a `module.path:callable` import path and rejects anything else, while an OpenAPI-derived `target` is always a route descriptor, so such a flag could never succeed. Generated binding artifacts shall carry an intact routing contract — `metadata.http_method` uppercase and `metadata.url_path` with a leading `/` — that survives a `BindingLoader` round-trip. The system shall NOT write a base URL into an artifact in FE-15a, because no consumer reads one until FE-15b. The system shall NOT write credentials supplied via `--header`, nor `securitySchemes` or credential-bearing examples, into any generated file. `--dry-run` shall list paths without writing; an existing file without `--force` shall be skipped with a WARNING and exit `0`.
+
+**Acceptance Criteria:**
+
+- **AC-1:** Given a document with N modules, then N `.binding.yaml` files shall be written to DIR.
+- **AC-2:** Given a generated artifact reloaded through `BindingLoader`, then `metadata.http_method` and `metadata.url_path` shall both be present and unchanged.
+- **AC-3:** Given `--header "Authorization: Bearer x"`, then the value shall not appear in any generated file.
+- **AC-4:** Given an existing output file and no `--force`, then the file shall be unchanged and exit shall be `0`.
+
+---
+
+#### FR-OAPI-003: OpenAPI Module Execution (Deferred — FE-15b)
+
+| Field | Value |
+|-------|-------|
+| **ID** | FR-OAPI-003 |
+| **Title** | Binding-Driven and Startup HTTP Proxy Registration |
+| **Priority** | P1 (deferred) |
+| **Priority Rationale** | The user-visible payoff of FE-15, deferred on two prerequisites that are not about OpenAPI: `--binding` is a registration path in Python only, and apcore-toolkit cannot yet encode a query parameter declared on a body method. |
+| **Source** | Feature Spec FE-15 FR-15-08, FR-15-09, FR-15-10, §8; Tech Design v2.0 §8.16.3, §8.16.4 |
+
+**Description:** The system shall register OpenAPI-derived binding artifacts as executable HTTP proxies by partitioning loaded bindings on a validated `metadata.http_method` and `metadata.url_path` and routing those to `HTTPProxyRegistryWriter`, all others to `RegistryWriter`. It shall additionally support `--openapi <SOURCE>` startup registration with no intermediate files. Base URL shall resolve as explicit override > artifact metadata > document `servers[0].url` > error. Every `WriteResult` shall be inspected and a WARNING emitted per failure. An operation declaring `in: query` parameters on a body method shall be refused **per operation** — not registered, WARNING naming it, batch continuing — until apcore-toolkit carries parameter-location metadata.
+
+**Acceptance Criteria:**
+
+- **AC-1:** Given a generated binding for a GET operation loaded via `--binding`, then executing the resulting command shall issue the HTTP request and return the response as module output.
+- **AC-2:** Given a document containing a `POST` with `in: query` parameters, then that operation shall not be registered, a WARNING shall name it, and every unaffected operation shall register and execute.
+- **AC-3:** Given a binding entry carrying `http_method` but no `url_path`, then it shall be refused with a named error rather than routed.
+- **AC-4:** Given no resolvable base URL, then the CLI shall exit `47` with a message naming the override flag.
+
+---
+
+### 5.12 CRUD Matrix
 
 | Entity | Create | Read | Update | Delete |
 |--------|--------|------|--------|--------|

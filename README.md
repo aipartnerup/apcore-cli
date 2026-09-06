@@ -454,22 +454,30 @@ apcore-cli [OPTIONS] COMMAND [ARGS]
 
 ### Built-in Commands
 
+Built-ins live **exclusively** under the reserved `apcli` group — invoke them as
+`<cli> apcli <sub>`. The root-level forms (`apcore-cli list`) were deprecation
+shims during the v0.7 migration and were removed in v0.8.0; `apcli` is the only
+path. User business modules stay unprefixed (`apcore-cli math.add`). The one
+exception is `man`, which remains at root by design. See
+[features/builtin-group.md](docs/features/builtin-group.md) (FE-13).
+
 | Command | Description |
 |---------|-------------|
-| `list` | List available modules with optional tag filtering, search, and annotation filters |
-| `describe <module_id>` | Show full module metadata and schemas |
-| `validate <module_id>` | Run preflight checks without executing (dry-run) |
-| `exec <module_id>` | Internal routing alias for module execution (modules are also available as direct top-level subcommands) |
-| `health [<module_id>]` | Show module health status (requires system modules) |
-| `usage [<module_id>]` | Show module usage statistics (requires system modules) |
-| `enable <module_id>` | Enable a disabled module at runtime |
-| `disable <module_id>` | Disable a module at runtime |
-| `reload <module_id>` | Hot-reload a module from disk |
-| `config get <key>` | Read a runtime configuration value |
-| `config set <key> <value>` | Update a runtime configuration value (requires approval) |
-| `describe-pipeline` | Show execution pipeline steps for a strategy |
-| `completion <shell>` | Generate shell completion script (bash/zsh/fish) |
-| `man <command>` | Generate man page in roff format |
+| `apcli list` | List available modules with optional tag filtering, search, and annotation filters |
+| `apcli describe <module_id>` | Show full module metadata and schemas |
+| `apcli validate <module_id>` | Run preflight checks without executing (dry-run) |
+| `apcli exec <module_id>` | Internal routing alias for module execution (modules are also available as direct top-level subcommands) |
+| `apcli init module <id>` | Scaffold a new module (decorator / convention / binding style) |
+| `apcli health [<module_id>]` | Show module health status (requires system modules) |
+| `apcli usage [<module_id>]` | Show module usage statistics (requires system modules) |
+| `apcli enable <module_id>` | Enable a disabled module at runtime |
+| `apcli disable <module_id>` | Disable a module at runtime |
+| `apcli reload <module_id>` | Hot-reload a module from disk |
+| `apcli config get <key>` | Read a runtime configuration value |
+| `apcli config set <key> <value>` | Update a runtime configuration value (requires approval) |
+| `apcli describe-pipeline` | Show execution pipeline steps for a strategy |
+| `apcli completion <shell>` | Generate shell completion script (bash/zsh/fish) |
+| `man <command>` | Generate man page in roff format (**root level**, not under `apcli`) |
 
 ### Module Execution Options
 
@@ -595,29 +603,29 @@ apcore Registry + Executor (your modules, unchanged)
 
 | Language | Repository | Status |
 |----------|-----------|--------|
-| **Python** | [apcore-cli-python](https://github.com/aiperceivable/apcore-cli-python) | v0.11.0 |
-| **TypeScript** | [apcore-cli-typescript](https://github.com/aiperceivable/apcore-cli-typescript) | v0.11.0 |
-| **Rust** | [apcore-cli-rust](https://github.com/aiperceivable/apcore-cli-rust) | v0.11.0 |
+| **Python** | [apcore-cli-python](https://github.com/aiperceivable/apcore-cli-python) | v0.12.0 |
+| **TypeScript** | [apcore-cli-typescript](https://github.com/aiperceivable/apcore-cli-typescript) | v0.12.0 |
+| **Rust** | [apcore-cli-rust](https://github.com/aiperceivable/apcore-cli-rust) | v0.12.0 |
 
 ## Version Compatibility
 
 apcore-cli is part of the broader apcore ecosystem; packages that share a
 minor version line are tested to work together. Snapshot below is the
-**currently tested combination** (2026-09-02). Full cross-ecosystem matrix
+**currently tested combination** (2026-09-06). Full cross-ecosystem matrix
 lives in [`apcore` README](https://github.com/aiperceivable/apcore#version-compatibility).
 
 | Component | Required version | Notes |
 |---|---|---|
-| `apcore` core SDK | `>= 0.28.0` (tested with 0.28.0) | apcore-cli-python / -typescript pin `>=0.28.0` (open); apcore-cli-rust pins `apcore = ">=0.28"` (open, plain semver range) |
-| `apcore-toolkit` | `>= 0.10.2` (tested with 0.10.2) | **required** runtime dep (no soft fallback as of 0.10.0); per-language pin varies — see 6.8 note below |
+| `apcore` core SDK | `>= 0.30.0` (tested with 0.30.0) | apcore-cli-python / -typescript pin `>=0.30.0` (open); apcore-cli-rust pins `apcore = ">=0.30"` (open, plain semver range) |
+| `apcore-toolkit` | `>= 0.11.1` (tested with 0.11.1) | **required** runtime dep (no soft fallback as of 0.10.0); FE-15a needs the `http-proxy` extra (Python) / feature (Rust) for `http(s)://` spec sources — see [openapi-import.md §4.6](docs/features/openapi-import.md) |
 
 ### Known dependency-pin divergence (tracked as issue 6.8)
 
 | CLI package | apcore pin | apcore-toolkit pin | Effective range |
 |---|---|---|---|
-| apcore-cli-python | `apcore>=0.28.0` | `apcore-toolkit>=0.10.2` | open upper bound — accepts future minors |
-| apcore-cli-typescript | peer `apcore-js>=0.28.0` | peer `apcore-toolkit>=0.10.2` | open upper bound |
-| apcore-cli-rust | `apcore = ">=0.28"` | `apcore-toolkit = ">=0.10.2"` | open upper bound |
+| apcore-cli-python | `apcore>=0.30.0` | `apcore-toolkit[http-proxy]>=0.11.1` | open upper bound — accepts future minors |
+| apcore-cli-typescript | peer `apcore-js>=0.30.0` | peer `apcore-toolkit>=0.11.1` | open upper bound |
+| apcore-cli-rust | `apcore = ">=0.30"` | `apcore-toolkit = ">=0.11.1"`, `features = ["http-proxy"]` | open upper bound |
 
 Reconciliation (adopting consistent caret semantics across all three) is
 planned for a follow-up coordinated release.

@@ -12,5 +12,9 @@ Options:
       --extensions-dir <PATH>  Path to extensions directory
       --commands-dir <PATH>    Path to convention-based commands directory
       --binding <PATH>         Path to binding.yaml for display overlay
+      --acl <PATH>             Path to the ACL file or directory (default: ./acl)
+      --identity-id <ID>       Assert Identity.id for ACL conditions. Unauthenticated assertion, not authentication.
+      --identity-type <TYPE>   Assert Identity.type for ACL conditions (default: user). Unauthenticated assertion, not authentication.
+      --role <ROLE>            Assert an Identity role for ACL conditions. Repeatable. Unauthenticated assertion, not authentication.
   -h, --help                   Print help
   -V, --version                Print version

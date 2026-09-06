@@ -6,7 +6,10 @@ Commands:
   help  Print this message or the help of the given subcommand(s)
 
 Options:
-      --log-level <LEVEL>  Logging level (DEBUG|INFO|WARNING|ERROR) [default: WARNING]
-      --all-options        Show all options in help output (including built-in options)
-  -h, --help               Print help
-  -V, --version            Print version
+      --log-level <LEVEL>     Logging level (DEBUG|INFO|WARNING|ERROR) [default: WARNING]
+      --all-options           Show all options in help output (including built-in options)
+      --identity-id <ID>      Assert Identity.id for ACL conditions. Unauthenticated assertion, not authentication.
+      --identity-type <TYPE>  Assert Identity.type for ACL conditions (default: user). Unauthenticated assertion, not authentication.
+      --role <ROLE>           Assert an Identity role for ACL conditions. Repeatable. Unauthenticated assertion, not authentication.
+  -h, --help                  Print help
+  -V, --version               Print version

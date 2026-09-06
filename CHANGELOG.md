@@ -4,6 +4,39 @@ All notable changes to the apcore-cli specification will be documented in this f
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.0] - 2026-09-06
+
+Two new features — **FE-14 ACL Governance** and **FE-15a OpenAPI Import** — plus the aligned **apcore 0.30.0** / **apcore-toolkit 0.11.1** runtime upgrade. All three SDKs ship as 0.12.0: Python **1004 passed / 5 xfailed** (was 815), TypeScript **807 / 807** (was 661), Rust **996 passed / 0 failed / 3 ignored** (was 511).
+
+**Why a minor.** Both features add normative specification content and new command surface (`apcli acl`, `apcli openapi`), and FE-14 makes a previously-inert enforcement path live: a project that already ships `acl/global_acl.yaml` sees its rules take effect for the first time. The security fixes below also change what a working consumer observes.
+
+### Added
+
+- **FE-14 ACL Governance** (`docs/features/acl-governance.md`, SRS §5.10 `FR-ACL-001`…`004`, Tech Design §8.15). The CLI resolves an ACL root through the FE-07 4-tier chain and attaches it via `Executor.set_acl()`; a missing root attaches nothing, preserving apcore's invariant that enforcement stays off unless configured. Adds the `apcli acl` group — `list`, `check`, `validate`, `status` — plus `--identity-id` / `--identity-type` / `--role`, `ACL_RULE_ERROR -> 47`, audit wiring for `acl.audit.*`, and a strategy-bypass warning. Before this, the CLI carried exit code 77 and an `acl` preflight row that no configuration could ever reach.
+- **FE-15a OpenAPI Import** (`docs/features/openapi-import.md`, SRS §5.11 `FR-OAPI-001`/`002`, Tech Design §8.16). `apcli openapi scan` and `generate` turn an OpenAPI 3.x document into `ScannedModule` form and `.binding.yaml` artifacts through the apcore-toolkit `OpenAPIScanner`. Closes the half of deferred issue #15 that does not require a registry.
+
+### Changed
+
+- **Version Compatibility refreshed to apcore 0.30.0 + apcore-toolkit 0.11.1.** Python `apcore>=0.30.0` / `apcore-toolkit[http-proxy]>=0.11.1`; TypeScript peer `apcore-js>=0.30.0` / `apcore-toolkit>=0.11.1`; Rust `apcore = ">=0.30"` / `apcore-toolkit = { version = ">=0.11.1", features = ["http-proxy"] }`. FE-15a's `http(s)://` spec sources need the `http-proxy` extra (Python) or feature (Rust); local files and `generate` do not. Each SDK verified the bump source-neutral by running its suite against the new floors before implementing anything else.
+- **README "Built-in Commands" corrected to the `apcli` group.** It had listed built-ins as bare root commands since before the v0.8.0 removal of the root-level deprecation shims, so it documented an invocation form that has not worked for four minor versions.
+- **`security.md` §4.4 sandbox invariant 1 rewritten.** It required an environment "allowlist-built, NOT inherited+filtered" over a fixed key list; all three SDKs implement, and had long implemented, exactly the `APCORE_`-prefix inherit-and-filter it forbade — necessarily, since `APCORE_EXTENSIONS_ROOT` must reach the child. The spec was stale, not the implementations.
+
+### Fixed
+
+- **`--sandbox` bypassed the ACL entirely, in all three SDKs** (`acl-governance.md` §4.10). Each sandbox runner builds its own `Registry` + `Executor` and never receives the attached ACL, so switching on a **security** flag switched off access control. The gate now runs in the parent before the spawn, refusing with exit 77. Rust additionally had, and fixed, the same bypass on its `FsDiscoverer` script-module path.
+- **The gate itself could be written to fail silently.** A gate passing no `Context` leaves *conditional* deny rules inert (§6.5 makes every conditional rule a non-match without one) while they fire in-process; a gate omitting the argument projection makes `arguments` conditions UNEVALUABLE, which §6.1.1 resolves toward **denial** — so it wrongly denies calls such a rule was written to permit, as well as failing to grant. Both are now normative, with discriminating tests.
+- **Test suites in all three SDKs wrote to the developer's real `~/.apcore-cli/audit.jsonl`** — measured at 1272 bytes per TypeScript run, 639 per Rust run, and 1006 accumulated rows in Python. Pre-existing; surfaced by FE-14's audit records. Fixed test-side only, verified by byte count and md5 across full runs, and positively confirmed by checking the redirected files captured the same volume rather than the writes having stopped for an unrelated reason.
+- **`ACL_RULE_ERROR` reached no exit-code map**, so a malformed ACL file exited the generic `1`, indistinguishable from "the module ran and failed". Now `47`; `77` stays reserved for an actual access decision.
+- **SRS `FR-SEC-004` AC-1 contradicted the feature spec** — it required `HOME` to be *absent* in the sandbox while `security.md` §4.4 assigns it to the tempdir. Corrected to the implemented behaviour.
+
+### Notes
+
+- **A retracted claim, recorded rather than deleted.** An earlier draft of §4.8 asserted the audit wiring was blocked on a public `ACL.set_audit_logger` that Python and TypeScript would have to gain, and set FE-14's floor to apcore 0.30.0 for that reason. It was wrong — all three SDKs accept the callback as a constructor argument — and the claim reached implementers before it was checked against the SDK sources. The wiring needs no upstream change; the only cost is `reload()`, which no apcore-cli SDK uses.
+- **Six of the nine specification defects this release fixed were found by implementing it**, and most were of one kind: a decision the spec did not make, which three implementations then made differently — the identity sentinel (`@cli` vs `cli`), four root flag help strings (which the conformance fixtures byte-match), `acl check`'s subcommand-level wording, the audit record's key order, and the environment boolean spelling table. Two were worse than divergence: the identity-merge precedence rule had a natural implementation that silently dropped unrestated fields, and `--writer native` could not have worked for any input the command can produce.
+- **FE-15b remains deferred** on two prerequisites, neither about OpenAPI: `--binding` is a registration path in Python only (TypeScript populates a display overlay and has no standalone registry; Rust logs a line), and apcore-toolkit cannot yet encode a query parameter declared on a body method. FE-15a reports the affected operations as hazards so they are visible before that lands.
+
+---
+
 ## [0.11.0] - 2026-09-02
 
 Tracks the aligned **apcore 0.28.0** and **apcore-toolkit 0.10.2** runtime upgrade across all three SDKs, which ship as **0.11.0**.

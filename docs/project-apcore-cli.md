@@ -1,5 +1,5 @@
 ---
-description: "Project manifest for apcore-cli: the FE-01 through FE-13 feature table with descriptions and priorities, requirement traceability matrix, and project dependencies."
+description: "Project manifest for apcore-cli: the FE-01 through FE-15 feature table with descriptions and priorities, requirement traceability matrix, and project dependencies."
 ---
 
 # Project Manifest: apcore-cli
@@ -28,6 +28,8 @@ description: "Project manifest for apcore-cli: the FE-01 through FE-13 feature t
 | **FE-11** | **Usability Enhancements** | Dry-run, system commands, error guidance, trace, streaming, enhanced discovery, strategy selection, output formats, multi-level grouping, custom commands. | P0–P2 | [usability-enhancements.md](features/usability-enhancements.md) |
 | **FE-12** | **Module Exposure Filtering** | Declarative `expose` config (all/include/exclude) with glob patterns to filter which modules surface as CLI commands. | P1 | [exposure-filtering.md](features/exposure-filtering.md) |
 | **FE-13** | **Built-in Command Group (`apcli`)** | Relocates all apcore-cli-provided built-in commands under a reserved `apcli` group. Root keeps only meta-commands + business modules. Supports visibility modes (`all`/`none`/`include`/`exclude`) and `disable_env` opt-out for env-var override. Embedded-mode auto-hide. | P0 | [builtin-group.md](features/builtin-group.md) |
+| **FE-14** | **ACL Governance** | Attaches an apcore `ACL` to the CLI's Executor from `acl.root`, and adds the `apcli acl` group (`list`/`check`/`validate`/`status`) for authoring, evaluating, and linting access-control rules from the terminal. | P1 | [acl-governance.md](features/acl-governance.md) |
+| **FE-15** | **OpenAPI Import** | **FE-15a**: `apcli openapi scan` / `generate` — turns an OpenAPI 3.x document into `ScannedModule` form and binding artifacts via the apcore-toolkit `OpenAPIScanner`. No registry, no execution. **FE-15b (deferred)**: binding-driven and startup HTTP proxying, blocked on apcore-toolkit parameter-location metadata and on `--binding` registration parity in the TypeScript and Rust SDKs. | P1 | [openapi-import.md](features/openapi-import.md) |
 
 ---
 
@@ -52,7 +54,8 @@ Maps high-level requirements (from [ideas/draft.md](../ideas/draft.md)) to featu
 ---
 
 ## Project Dependencies
-- `apcore >= 0.17.1` (Core protocol, Registry, Executor, error hierarchy, Config Bus, Execution Pipeline Strategy)
+- `apcore >= 0.29.0` (Core protocol, Registry, Executor, error hierarchy, Config Bus, Execution Pipeline Strategy, ACL — FE-14)
+- `apcore-toolkit >= 0.11.0` (Formatting, BindingLoader, DisplayResolver, RegistryWriter, OpenAPIScanner — FE-15)
 - `click >= 8.1` (CLI framework — confirmed in [Tech Design v2.0](tech-design.md), ADR-01)
 - `jsonschema >= 4.20` (JSON Schema validation and parsing)
 - `rich >= 13.0` (Terminal output formatting — tables, syntax highlighting)

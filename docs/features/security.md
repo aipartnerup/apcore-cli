@@ -69,16 +69,33 @@ apcore_cli/security/
 
 ```
 _sandboxed_execute(module_id, input_data):
-  # 1. Build allowlisted environment.
+  # 1. Build the environment from two explicit sources. Never a bulk copy of
+  #    os.environ — caller-defined secrets must not leak.
   env = {}
-  for key in SANDBOX_ENV_ALLOWLIST:        # PATH, HOME, LANG, LC_*, TZ, USER, TMPDIR
+  for key in SANDBOX_ALLOW_KEYS:           # PATH, LANG, LC_ALL
     if key in os.environ: env[key] = os.environ[key]
-  # No bulk-copy of os.environ — caller-defined secrets must not leak.
+  for key, val in os.environ.items():      # framework config the child needs
+    if key.startswith(SANDBOX_ALLOW_PREFIX)         # "APCORE_"
+       and not key.startswith(SANDBOX_DENY_PREFIX)  # "APCORE_AUTH_"
+       and key not in SANDBOX_DENY_KEYS:            # {"APCORE_AUTH_API_KEY"}
+      env[key] = val
 
   # 2. Create per-call tempdir (auto-removed on context exit / Drop).
   with TemporaryDirectory() as tmp:
     env["TMPDIR"] = tmp                    # subprocess sees its own scratch
     env["HOME"]  = tmp                     # confine accidental ~/ writes
+
+    # 2b. Propagate and absolutize EVERY path-typed var before injection. The
+    #     child's cwd is `tmp` (step 4), so a relative value silently re-roots
+    #     there. Resolution is against the PARENT's cwd.
+    root = self.extensions_root or env.get("APCORE_EXTENSIONS_ROOT")
+    if root is None:
+      raise ModuleExecutionError("sandbox: extensions root not propagated")
+    env["APCORE_EXTENSIONS_ROOT"] = absolute(root)
+    # Step 1's APCORE_ pass-through forwards these VERBATIM, so each must be
+    # re-absolutized here or the pass-through silently defeats invariant 6.
+    for key in SANDBOX_PATH_TYPED_VARS:      # {"APCORE_ACL_ROOT", ...}
+      if key in env: env[key] = absolute(env[key])
 
     # 3. Resolve module entry-point. Outside-extensions-root resolution rejects
     #    via Sandbox.with_extensions_root prefix check (audit D1-004).
@@ -113,11 +130,21 @@ _sandboxed_execute(module_id, input_data):
 ```
 
 **Cross-SDK-critical invariants** (every implementation must preserve):
-1. Environment is allowlist-built, NOT inherited+filtered. Adding a new safe env-var requires updating the allowlist in all 3 SDKs.
+1. Environment is built from **two explicit sources** and is never a bulk copy of the parent environment: a fixed key allowlist (`PATH`, `LANG`, `LC_ALL`) plus an `APCORE_`-prefix pass-through, minus the `APCORE_AUTH_` deny prefix and the explicit deny keys. The prefix pass-through is the one place inheritance is permitted — the child needs the framework's own configuration to function at all — and the deny prefix is what keeps credentials out of it. Adding a fixed key, or widening or narrowing either prefix, requires updating all 3 SDKs.
+
+   *Corrected 2026-09-06.* This invariant previously read "allowlist-built, NOT inherited+filtered" over a fixed list of `PATH, HOME, LANG, LC_*, TZ, USER, TMPDIR`. Both halves were wrong. All three SDKs implement, and have long implemented, exactly the prefix-based inherit-and-filter the old wording forbade — necessarily, since `APCORE_EXTENSIONS_ROOT` must reach the child and was not even in the list the same section called "inherited" (§4.4 builder methods). `HOME` and `TMPDIR` are *assigned* to the tempdir in step 2, not inherited, and `TZ` / `USER` / `LC_*` are forwarded by no SDK. The spec was stale, not the implementations.
 2. Tempdir cleanup MUST run on the exception path (Python `TemporaryDirectory` context, Rust `tempfile::TempDir` Drop, TS `fs.rm({recursive:true})` in finally).
 3. Output-size check fires BEFORE return and is **per-stream** — `len(stdout) > cap` and `len(stderr) > cap` are checked independently. A 0-exit module producing 100 MiB on either pipe is rejected. Audit D1-004 `with_max_output_bytes` (2026-05); audit D10-001 per-stream alignment (2026-05-08).
 4. Timeout uses SIGTERM-first / SIGKILL-fallback (300 s default); never raw SIGKILL on first signal.
 5. `extensions_root` confinement check happens BEFORE spawn — never resolve symlinks via subprocess. Audit D1-004 `with_extensions_root`.
+6. **Path-typed values crossing the sandbox boundary MUST be propagated, absolutized, and never guessed by the child.** Three obligations; any one alone leaves the default configuration broken, which is why this is a single invariant rather than three.
+   - **Absolutize in the parent.** A path-typed env var MUST be resolved against the **parent's** cwd before injection. The child's cwd is the per-call tempdir (step 4), so a relative value silently re-roots there.
+   - **Propagate at every call site.** The parent MUST hand its **resolved** extensions root to `Sandbox` on **every** sandbox path. Absolutizing a variable that was never set fixes nothing, and a call site that constructs `Sandbox` without supplying the root is the common form of this defect — it is invisible to any test that configures an absolute root.
+   - **Fail loudly in the child.** The child MUST NOT fall back to a relative default when the variable is absent; it MUST exit non-zero with the same named error (`sandbox: extensions root not propagated`). A child-side default of `./extensions` resolves against the tempdir and surfaces as `CONFIG_NOT_FOUND` on a directory the operator never named. The parent's pre-spawn check is the normal path; the child's check covers a runner invoked directly and a future parent/child mismatch, so both are required and neither substitutes for the other.
+
+   **The set is explicit, not inferred.** `SANDBOX_PATH_TYPED_VARS` names every `APCORE_*` variable whose value is a filesystem path — currently `APCORE_EXTENSIONS_ROOT` and `APCORE_ACL_ROOT`. It exists because step 1's `APCORE_`-prefix pass-through forwards matching variables **verbatim**: absolutizing only the one the sandbox happens to know about leaves every other path-typed variable to re-root in the tempdir, which is invariant 6 defeated by the mechanism that implements invariant 1. Adding a path-typed `APCORE_*` config key requires adding it to this set in all 3 SDKs.
+
+   `acl.root` is in that set for a reason worth stating. [`acl-governance.md` §4.10](acl-governance.md) permits forwarding `APCORE_ACL_ROOT` into the child as defence in depth; without absolutization that forwarding is a no-op that *looks* like protection. A relative root re-roots to the tempdir, the path does not exist, and §4.2's "missing path attaches nothing" invariant then leaves the child with **no ACL at all** — fail-open, not fail-closed. The parent-side gate §4.10 mandates is what actually protects that path; this clause only stops the optional second layer from being illusory.
 
 ---
 
@@ -396,7 +423,11 @@ retrieve(key, ref):
 - pure: true (no I/O, no mutation of inputs)
 
 ### Builder methods (fluent style)
-- `with_extensions_root(path)` — sets the canonical extensions root for the sandbox subprocess. Takes precedence over the inherited `APCORE_EXTENSIONS_ROOT` env var; injected as that env var into the subprocess.
+- `with_extensions_root(path)` — sets the canonical extensions root for the sandbox subprocess. Takes precedence over the inherited `APCORE_EXTENSIONS_ROOT` env var; injected as that env var into the subprocess, **absolutized against the parent's cwd** (invariant 6). A relative `path` is accepted and resolved here rather than rejected, so callers may pass through whatever the FE-07 chain produced.
+
+  **Callers MUST supply it.** The CLI's resolved extensions root comes from the FE-07 chain (`--extensions-dir` > `APCORE_EXTENSIONS_ROOT` > `apcore.yaml` `extensions.root` > `./extensions`), and its default is *relative*. A `Sandbox` constructed without this builder, and run without `APCORE_EXTENSIONS_ROOT` in the environment, has nothing to inject; per invariant 6 it MUST then fail before spawn with `sandbox: extensions root not propagated`. It MUST NOT spawn and leave the child to guess — that is the defect this contract exists to prevent, and the child is required to refuse the same way if it is ever reached without the variable.
+
+  Every sandbox call site — business-module dispatch **and** `apcli exec` — must call this builder. The two paths are wired independently and one being correct hides nothing about the other, so the divergence is invisible unless a test runs `apcli exec --sandbox` under a *relative* extensions root (T-SEC-19).
 - `with_max_output_bytes(n)` — overrides the per-stream output cap; replaces the default 64 MiB limit. `None` (the default) preserves the 64 MiB cap.
 
 Each builder returns the same `Sandbox` instance (Python / TypeScript) or a moved owned value (Rust) so calls can be chained. All three SDKs expose the same fluent surface.
@@ -612,6 +643,7 @@ Logic steps:
    - Omit all other environment variables.
 2. Create temporary directory (platform temp location; prefix `apcore_sandbox_`).
 3. Set `HOME` and `TMPDIR` to temporary directory.
+3b. **Propagate and absolutize path-typed variables (invariant 6).** Resolve the extensions root as `self._extensions_root` else the inherited `APCORE_EXTENSIONS_ROOT`; if neither is present, raise `ModuleExecutionError("sandbox: extensions root not propagated")` **before** spawning. Absolutize it against the **parent's** cwd and set it in `env`. Then absolutize every other variable in `SANDBOX_PATH_TYPED_VARS` (currently `APCORE_ACL_ROOT`) that step 1's prefix pass-through carried in — the pass-through forwards them verbatim, so skipping this re-roots them to the tempdir.
 4. Serialize `input_data` to JSON string.
 5. Spawn the **language-specific sandbox runner entry point** as a child process:
    - Python: `[sys.executable, "-m", "apcore_cli._sandbox_runner", module_id]`
@@ -620,6 +652,7 @@ Logic steps:
    - Pass serialized JSON to stdin.
    - Capture stdout (result) and stderr (error messages).
    - Timeout: **300 seconds** (5 minutes).
+   - **The runner MUST NOT default a missing `APCORE_EXTENSIONS_ROOT`.** It reads the variable and, when absent, exits non-zero with `sandbox: extensions root not propagated` on stderr. It MUST NOT fall back to `./extensions`, which its own cwd (the tempdir) would resolve to a directory the operator never named. Step 3b makes this unreachable on the normal path; the runner check covers direct invocation and any future parent/child mismatch, and is verified independently (T-SEC-21a).
 6. If process exits non-zero: raise `ModuleExecutionError(stderr_content)`.
 7. If `len(stdout) > 64 MiB` OR `len(stderr) > 64 MiB`: raise `ModuleExecutionError("sandbox <stream> exceeds size limit")` (per-stream — audit D10-001, 2026-05-08).
 8. Parse stdout as JSON and return.
@@ -679,3 +712,8 @@ Each language port ships a runner entry point that reads `module_id` from argv, 
 | T-SEC-16 | No sandbox flag | Module runs in current process. Normal environment. |
 | T-SEC-17 | Local-only registry | No API key required. No authentication headers. |
 | T-SEC-18 | Inspect `apcore.yaml` for stored secret | Value is NOT plaintext. Prefixed with `keyring:` or `enc:`. |
+| T-SEC-19 | **`apcli exec --sandbox` under a *relative* `extensions.root` (the default `./extensions`)** | Module executes successfully. **Discriminating case for invariant 6** — a test written with an absolute root passes against the defect. Must run `apcli exec`, not business-module dispatch: the two call sites are wired independently and one may be correct while the other is not. |
+| T-SEC-20 | Business-module dispatch `--sandbox` under a relative `extensions.root` | Module executes successfully. Paired with T-SEC-19 so a fix to one path cannot mask the other. |
+| T-SEC-21 | **Parent side.** Sandbox with the extensions root neither set on `Sandbox` nor present in the environment | Raises `sandbox: extensions root not propagated` **before** spawn; assert no process was started, not merely that the call failed. |
+| T-SEC-21a | **Runner side, tested independently.** Invoke the internal sandbox runner directly with `APCORE_EXTENSIONS_ROOT` unset | Exits non-zero with `sandbox: extensions root not propagated`; asserts it never resolves `./extensions`. **T-SEC-21 alone cannot cover this** — it passes with the runner's relative default fully intact, since the parent refuses first. The two obligations of invariant 6 need two tests. |
+| T-SEC-22 | Inspect the injected child environment, with **both** `extensions.root` and `acl.root` configured relative | `APCORE_EXTENSIONS_ROOT` **and** `APCORE_ACL_ROOT` are present and **absolute**. Asserting only the extensions root passes against a step-3b that forgets `SANDBOX_PATH_TYPED_VARS`, which is how the `APCORE_` pass-through defeats invariant 6. |
